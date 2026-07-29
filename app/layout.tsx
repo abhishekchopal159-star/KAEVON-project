@@ -69,7 +69,7 @@ export const metadata: Metadata = {
   creator: "Styloverse",
 
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.png",
   },
 };
 
@@ -86,7 +86,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-[#FFF8F2] font-[var(--font-body)] text-[#171717] antialiased">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"Organization",name:"Styloverse",url:process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000",logo:`${process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000"}/favicon.ico`,sameAs:[]}).replace(/</g,"\\u003c")}} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"Organization",name:"Styloverse",url:process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000",logo:`${process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000"}/icon.png`,sameAs:[]}).replace(/</g,"\\u003c")}} />
         <AuthProvider>
           <StorefrontCloudSync />
           <PublicOperationsState />
