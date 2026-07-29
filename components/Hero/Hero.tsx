@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -9,28 +11,31 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { useStorefrontContent } from "@/hooks/useStorefrontContent";
 
 export default function Hero() {
+  const { home } = useStorefrontContent();
   return (
-    <section className="relative min-h-screen overflow-hidden bg-[#FFF8F2]">
+    <section className="relative min-h-screen w-full max-w-full overflow-hidden bg-[#FFF8F2]">
 
       {/* Background Image */}
       <Image
-        src="/images/banners/new1.png"
-        alt="Hero Banner"
+        src={home.heroImage}
+        alt="Styloverse new collection fashion campaign"
         fill
         priority
         unoptimized
         sizes="100vw"
-        className="object-contain object-[right_center] scale-[1.02] select-none"
+        className="select-none object-cover object-[72%_center] lg:object-center"
         draggable={false}
       />
 
-      {/* Left Gradient */}
-      <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#FFF8F2] via-[#FFF8F2]/75 to-transparent" />
+      {/* Mobile readability veil. Hidden on desktop so the original 8K image
+          keeps its full contrast, skin tones and garment detail. */}
+      <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#FFF8F2]/95 via-[#FFF8F2]/80 to-[#FFF8F2]/25 lg:hidden" />
 
       {/* Decorative ambient glows (behind content, does not touch image) */}
-      <div className="pointer-events-none absolute inset-0 z-[2]">
+      <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         <div className="absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full bg-[#5B3DF5]/[0.09] blur-[110px]" />
         <div className="absolute bottom-0 left-[6%] h-[300px] w-[300px] rounded-full bg-[#5B3DF5]/[0.06] blur-[90px]" />
       </div>
@@ -44,16 +49,16 @@ export default function Hero() {
           <div className="inline-flex items-center gap-2 rounded-full border border-[#5B3DF5]/15 bg-[#EFE6FF] px-6 py-3 shadow-[0_2px_10px_-2px_rgba(91,61,245,0.15)]">
             <Sparkles size={17} strokeWidth={2.25} className="text-[#5B3DF5]" />
             <span className="text-[14px] font-semibold uppercase tracking-[0.14em] text-[#5B3DF5]">
-              New Collection 2026
+              {home.heroEyebrow}
             </span>
           </div>
 
           {/* Heading */}
           <h1 className="mt-9 text-[64px] font-black leading-[0.95] tracking-[-0.02em] text-[#111] sm:text-[76px] lg:text-[88px] xl:text-[96px]">
-            Where Fashion
+            {home.heroTitle}
             <br />
             <span className="relative inline-block text-[#5B3DF5]">
-              Meets You
+              {home.heroAccent}
               <svg
                 className="absolute -bottom-2 left-0 w-full"
                 height="14"
@@ -74,15 +79,14 @@ export default function Hero() {
 
           {/* Description */}
           <p className="mt-8 max-w-[560px] text-[20px] leading-[34px] text-[#555] lg:text-[22px] lg:leading-[38px]">
-            Discover premium fashion, footwear and accessories crafted to
-            elevate your everyday style.
+            {home.heroDescription}
           </p>
 
           {/* Buttons */}
           <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:items-center">
 
             <Link
-              href="/shop"
+              href={home.primaryHref}
               className="group relative flex h-[64px] min-w-[220px] items-center justify-center overflow-hidden rounded-2xl px-8 text-[18px] font-semibold tracking-[0.01em] text-white shadow-[0_14px_32px_-10px_rgba(91,61,245,0.55)] transition-all duration-300 hover:-translate-y-[3px] hover:shadow-[0_22px_44px_-12px_rgba(91,61,245,0.6)] active:translate-y-0"
               style={{
                 background:
@@ -90,7 +94,7 @@ export default function Hero() {
               }}
             >
               <span className="relative z-10 flex items-center">
-                Shop Now
+                {home.primaryLabel}
                 <ArrowRight
                   size={20}
                   strokeWidth={2.5}
@@ -101,11 +105,11 @@ export default function Hero() {
             </Link>
 
             <Link
-              href="/shop"
-              className="group flex h-[64px] min-w-[250px] items-center justify-center rounded-2xl border-[1.5px] border-[#222] bg-white px-8 text-[18px] font-semibold text-[#111] transition-all duration-300 hover:-translate-y-[3px] hover:border-[#5B3DF5] hover:text-[#5B3DF5] hover:shadow-[0_18px_36px_-12px_rgba(17,17,17,0.15)] active:translate-y-0"
-            >
-              Explore Collection
-            </Link>
+  href={home.secondaryHref}
+  className="group flex h-[64px] min-w-[250px] items-center justify-center rounded-2xl border-[1.5px] border-[#222] bg-white px-8 text-[18px] font-semibold text-[#111] transition-all duration-300 hover:-translate-y-[3px] hover:border-[#5B3DF5] hover:text-[#5B3DF5]"
+>
+  {home.secondaryLabel}
+</Link>
 
           </div>
 

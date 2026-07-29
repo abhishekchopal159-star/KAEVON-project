@@ -1,0 +1,115 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function authenticatedEmail() {
+      return request.auth.token.keys().hasAny(['email'])
+        ? request.auth.token.email
+        : '';
+    }
+
+    match /users/{userId} {
+      allow create: if (
+        isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role == 'customer'
+        && request.resource.data.email == authenticatedEmail()
+        && request.resource.data.subscriptionPlan == 'free'
+      ) || isAdmin();
+
+      allow read: if isOwner(userId) || isAdmin();
+
+      allow update: if (
+        isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.email == authenticatedEmail()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'phoneNumber',
+          'photoURL',
+          'dateOfBirth',
+          'gender',
+          'subscriptionPlan',
+          'lastActiveAt',
+          'updatedAt'
+        ])
+        && (
+          (
+            resource.data.keys().hasAny(['subscriptionPlan'])
+            && request.resource.data.subscriptionPlan == resource.data.subscriptionPlan
+          )
+          || (
+            !resource.data.keys().hasAny(['subscriptionPlan'])
+            && request.resource.data.subscriptionPlan == 'free'
+          )
+        )
+      ) || isAdmin();
+
+      allow delete: if isAdmin();
+
+      match /commerce/{documentId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
+    }
+
+    match /orders/{orderId} {
+      allow create: if isSignedIn()
+        && request.resource.data.id == orderId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'Confirmed'
+        && (
+          (
+            request.resource.data.paymentMethod == 'Cash on Delivery'
+            && request.resource.data.paymentStatus == 'COD Collection Pending'
+          )
+          || (
+            (
+              request.resource.data.paymentMethod == 'UPI'
+              || request.resource.data.paymentMethod == 'Card'
+              || request.resource.data.paymentMethod == 'Wallet'
+            )
+            && request.resource.data.paymentStatus == 'Pending'
+          )
+        );
+
+      allow read: if (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+      ) || isAdmin();
+
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && resource.data.status == 'Confirmed'
+        && request.resource.data.status == 'Cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'cancelledAt', 'updatedAt'])
+      );
+
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

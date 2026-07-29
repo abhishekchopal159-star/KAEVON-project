@@ -60,7 +60,7 @@ export default function ProductDescription() {
           this blazer is made for professionals who appreciate luxury,
           comfort and timeless style.
 
-          Whether you're attending a wedding, business meeting,
+          Whether you&apos;re attending a wedding, business meeting,
           dinner party or formal event, this blazer offers
           exceptional confidence with an elegant finish.
         </p>
@@ -116,7 +116,7 @@ export default function ProductDescription() {
           <BadgeCheck size={28} />
 
           <h3 className="text-2xl font-bold">
-            Why You'll Love It
+            Why You&apos;ll Love It
           </h3>
 
         </div>

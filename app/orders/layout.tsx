@@ -1,0 +1,18 @@
+import type { ReactNode } from "react";
+import type { Metadata } from "next";
+
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+
+export const metadata:Metadata={robots:{index:false,follow:false}};
+
+export default function OrdersLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <ProtectedRoute>
+      {children}
+    </ProtectedRoute>
+  );
+}

@@ -1,0 +1,400 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function authenticatedEmail() {
+      return request.auth.token.keys().hasAny(['email'])
+        ? request.auth.token.email
+        : '';
+    }
+
+    function paymentMapUnchanged() {
+      return (
+        !resource.data.keys().hasAny(['payment'])
+        && !request.resource.data.keys().hasAny(['payment'])
+      ) || (
+        resource.data.keys().hasAny(['payment'])
+        && request.resource.data.keys().hasAny(['payment'])
+        && request.resource.data.payment == resource.data.payment
+      );
+    }
+
+    function onlinePaymentTruthUnchanged() {
+      return request.resource.data.paymentMethod == resource.data.paymentMethod
+        && request.resource.data.paymentStatus == resource.data.paymentStatus
+        && paymentMapUnchanged();
+    }
+
+    function validCodAdminPaymentUpdate() {
+      return resource.data.paymentMethod == 'Cash on Delivery'
+        && request.resource.data.paymentMethod == 'Cash on Delivery'
+        && request.resource.data.keys().hasAny(['payment'])
+        && request.resource.data.payment.method == 'Cash on Delivery'
+        && (
+          request.resource.data.paymentStatus == 'COD Collection Pending'
+          || request.resource.data.paymentStatus == 'COD Received'
+        )
+        && request.resource.data.payment.status == request.resource.data.paymentStatus;
+    }
+
+    function validInventoryReservation(variantDocumentId) {
+      let order = getAfter(
+        /databases/$(database)/documents/orders/$(request.resource.data.lastReservationId)
+      );
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'stockReserved',
+          'status',
+          'lastReservationId',
+          'lastReservationAction',
+          'updatedAt'
+        ])
+        && request.resource.data.stockOnHand == resource.data.stockOnHand
+        && request.resource.data.stockReserved > resource.data.stockReserved
+        && request.resource.data.stockReserved <= resource.data.stockOnHand
+        && request.resource.data.lastReservationAction == 'reserved'
+        && (
+          !resource.data.keys().hasAny(['lastReservationId'])
+          || resource.data.lastReservationId != request.resource.data.lastReservationId
+          || !resource.data.keys().hasAny(['lastReservationAction'])
+          || resource.data.lastReservationAction != 'reserved'
+        )
+        && order.data.userId == request.auth.uid
+        && order.data.reservationStatus == 'reserved'
+        && order.data.inventoryReservations[variantDocumentId]
+          == request.resource.data.stockReserved - resource.data.stockReserved;
+    }
+
+    function validInventoryRelease(variantDocumentId) {
+      let order = getAfter(
+        /databases/$(database)/documents/orders/$(request.resource.data.lastReservationId)
+      );
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'stockReserved',
+          'status',
+          'lastReservationId',
+          'lastReservationAction',
+          'updatedAt'
+        ])
+        && request.resource.data.stockOnHand == resource.data.stockOnHand
+        && request.resource.data.stockReserved < resource.data.stockReserved
+        && request.resource.data.stockReserved >= 0
+        && request.resource.data.lastReservationAction in ['released', 'partial_released']
+        && resource.data.lastReservationId == request.resource.data.lastReservationId
+        && resource.data.lastReservationAction in ['reserved', 'partial_released']
+        && order.data.userId == request.auth.uid
+        && order.data.status in ['Cancelled', 'Partially Cancelled']
+        && order.data.inventoryReservations[variantDocumentId]
+          == resource.data.stockReserved - request.resource.data.stockReserved;
+    }
+
+    match /users/{userId} {
+      allow create: if (
+        isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role == 'customer'
+        && request.resource.data.email == authenticatedEmail()
+        && request.resource.data.subscriptionPlan == 'free'
+      ) || isAdmin();
+
+      allow read: if isOwner(userId) || isAdmin();
+
+      allow update: if (
+        isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.email == authenticatedEmail()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'phoneNumber',
+          'photoURL',
+          'dateOfBirth',
+          'gender',
+          'subscriptionPlan',
+          'lastActiveAt',
+          'updatedAt'
+        ])
+        && (
+          (
+            resource.data.keys().hasAny(['subscriptionPlan'])
+            && request.resource.data.subscriptionPlan == resource.data.subscriptionPlan
+          )
+          || (
+            !resource.data.keys().hasAny(['subscriptionPlan'])
+            && request.resource.data.subscriptionPlan == 'free'
+          )
+        )
+      ) || isAdmin();
+
+      allow delete: if isAdmin();
+
+      match /commerce/{documentId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
+    }
+
+    match /orders/{orderId} {
+      allow create: if isSignedIn()
+        && request.resource.data.id == orderId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'Confirmed'
+        && (
+          (
+            request.resource.data.paymentMethod == 'Cash on Delivery'
+            && request.resource.data.paymentStatus == 'COD Collection Pending'
+          )
+          || (
+            (
+              request.resource.data.paymentMethod == 'UPI'
+              || request.resource.data.paymentMethod == 'Card'
+              || request.resource.data.paymentMethod == 'Wallet'
+            )
+            && request.resource.data.paymentStatus == 'Pending'
+          )
+        )
+        && (
+          request.resource.data.reservationStatus == 'reserved'
+          || request.resource.data.reservationStatus == 'not_required'
+        );
+
+      allow read: if (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+      ) || isAdmin();
+
+      allow update: if (
+        isAdmin()
+        && (
+          onlinePaymentTruthUnchanged()
+          || validCodAdminPaymentUpdate()
+        )
+      ) || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && resource.data.status in ['Confirmed', 'Partially Cancelled']
+        && request.resource.data.status == 'Partially Cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'items',
+          'status',
+          'inventoryReservations',
+          'reservationStatus',
+          'partialCancellationAt',
+          'updatedAt'
+        ])
+      ) || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && resource.data.status in ['Confirmed', 'Partially Cancelled']
+        && request.resource.data.status == 'Cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'status',
+            'reservationStatus',
+            'cancelledAt',
+            'updatedAt'
+          ])
+        && (
+          request.resource.data.reservationStatus == 'released'
+          || request.resource.data.reservationStatus == 'not_required'
+        )
+      ) || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && resource.data.status == 'Delivered'
+        && request.resource.data.status == 'Return Requested'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'returnRequestId',
+          'returnRequestedAt',
+          'updatedAt'
+        ])
+        && existsAfter(/databases/$(database)/documents/returnRequests/$(request.resource.data.returnRequestId))
+        && getAfter(/databases/$(database)/documents/returnRequests/$(request.resource.data.returnRequestId)).data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/returnRequests/$(request.resource.data.returnRequestId)).data.orderId == orderId
+      );
+
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /inventoryVariants/{variantDocumentId} {
+      allow read: if isAdmin()
+        || get(
+          /databases/$(database)/documents/products/$(resource.data.productId)
+        ).data.status == 'published';
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || validInventoryReservation(variantDocumentId)
+        || validInventoryRelease(variantDocumentId);
+    }
+
+    match /inventorySkus/{skuId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /inventoryBarcodes/{barcodeId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /inventoryMovements/{movementId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /customerCrm/{customerId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /storeCategories/{categoryId} {
+      allow read: if resource.data.status == 'published'
+        || resource.data.status == 'scheduled'
+        || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /storeCollections/{collectionId} {
+      allow read: if resource.data.status == 'published'
+        || resource.data.status == 'scheduled'
+        || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /siteContent/{contentId} {
+      allow read: if resource.data.status == 'published'
+        || resource.data.status == 'scheduled'
+        || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /discountCampaigns/{campaignId} {
+      allow read: if resource.data.status == 'active'
+        || resource.data.status == 'scheduled'
+        || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /loyaltyWallets/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /productReviews/{reviewId} {
+      allow read: if resource.data.status == 'published'
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.verifiedPurchase == false
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+      allow update, delete: if isAdmin();
+    }
+
+    match /productQuestions/{questionId} {
+      allow read: if resource.data.status == 'published'
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.answer == '';
+      allow update, delete: if isAdmin();
+    }
+
+    match /productAlerts/{alertId} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.kind in ['price_drop', 'back_in_stock'];
+      allow update: if false;
+    }
+
+    match /returnRequests/{requestId} {
+      allow read: if (
+        isSignedIn() && resource.data.userId == request.auth.uid
+      ) || isAdmin();
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'requested'
+        && request.resource.data.refundStatus == 'not_applicable'
+        && request.resource.data.refundAmount == 0
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0;
+
+      // A future trusted server/webhook may use Admin SDK (which bypasses
+      // client rules) to set completed after the gateway confirms a refund.
+      allow update: if isAdmin()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.refundStatus != 'completed';
+      allow delete: if false;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read: if (
+        isSignedIn() && resource.data.userId == request.auth.uid
+      ) || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'open';
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /notificationQueue/{notificationId} {
+      allow read: if (
+        isSignedIn() && resource.data.userId == request.auth.uid
+      ) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /styleProfiles/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId)
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(userId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'userId', 'preferredCategories', 'preferredColors', 'preferredOccasions',
+          'preferredFits', 'sizes', 'measurements', 'budgetMin', 'budgetMax',
+          'wardrobeProductIds', 'packagingPreference', 'locale', 'currency', 'updatedAt'
+        ]);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /storeSettings/{settingsId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /publicStoreSettings/{settingsId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Styloverse
 
-## Getting Started
+Styloverse is a full-stack premium fashion commerce reference product built with Next.js 16, React 19, TypeScript, Firebase Authentication and Cloud Firestore. It includes a responsive storefront, customer account, safe demonstration checkout, and a role-protected operations suite for orders, products, inventory, customers, content, promotions, aftercare, analytics and settings.
 
-First, run the development server:
+## Safe project mode
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+This repository intentionally does **not** collect real money or promise real fulfilment. Card, UPI and wallet methods are presentation-ready, but online payment truth can become `Received` only after a future buyer connects a trusted server-side gateway webhook. The default environment remains:
+
+```env
+NEXT_PUBLIC_COMMERCE_MODE=demo
+NEXT_PUBLIC_PAYMENT_MODE=disabled
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm.cmd install
+Copy-Item .env.example .env.local
+npm.cmd run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Fill the Firebase web configuration values in `.env.local`, then open `http://localhost:3000`. Assign an administrator with `users/{uid}.role = "admin"`; never expose privileged credentials in source control.
 
-## Learn More
+## Quality commands
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd run test
+npm.cmd run build
+npm.cmd run test:e2e
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`npm.cmd run test:all` executes the complete local quality gate. Playwright covers Chromium, Firefox and WebKit; the Chromium visual matrix captures 360×800, 390×844, 430×932, 768×1024, 1366×768, 1440×900 and 1920×1080.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Documentation map
 
-## Deploy on Vercel
+- [Buyer handoff](docs/buyer-handoff.md)
+- [Administrator guide](docs/admin-user-guide.md)
+- [Firebase setup](docs/firebase-setup.md)
+- [Database and security model](docs/database-schema.md)
+- [Product publishing](docs/product-upload-guide.md)
+- [Testing and QA](docs/testing.md)
+- [Payment integration boundary](docs/payment-integration.md)
+- [Demo and live modes](docs/demo-live-mode.md)
+- [Customization and reset](docs/customization-guide.md)
+- [Known limitations](docs/known-limitations.md)
+- [Portfolio case study](docs/portfolio-case-study.md)
+- [Master roadmap](docs/world-class-master-roadmap-handoff.md)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Main routes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The public experience lives at `/`, `/shop`, `/collections` and `/product/[id]`. Customer features live under `/account`; checkout is authenticated. The private operations suite lives under `/admin` and validates both Firebase authentication and the Firestore admin role.
+
+Copyright © 2026 Styloverse. Portfolio/reference implementation.
